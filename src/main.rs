@@ -77,6 +77,10 @@ async fn command_list(session: &Session) -> Result<(), Box<dyn Error>> {
 }
 
 async fn put_data_file(session: &Session, remote_path: &Path, mut data: impl AsyncRead + Unpin) -> Result<(), Box<dyn Error>> {
+
+    // example for putting data to remote file
+    // AsyncRead accepts almost types of input stream, or fixed data
+
     let mut sftp_process = session
         .subsystem("sftp")
         .stdin(Stdio::piped())
