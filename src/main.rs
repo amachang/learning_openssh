@@ -3,7 +3,7 @@ use shell_escape::unix::escape;
 use openssh::{Session, SessionBuilder, Stdio, KnownHosts};
 use openssh_sftp_client::{Sftp, file::TokioCompatFile};
 use clap::Parser;
-use tokio::io::{copy, AsyncRead, BufReader, AsyncBufReadExt};
+use tokio::{io::{copy, AsyncRead, BufReader, AsyncBufReadExt}, time::{timeout, interval}, net::TcpStream};
 use regex::Regex;
 
 #[derive(Debug, Parser)]
@@ -24,6 +24,11 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
+    let host = &args.host;
+    let port = args.port;
+
+    wait_for_ssh_connectable(host, port).await?;
+
     let session = SessionBuilder::default()
         .user(args.user)
         .port(args.port)
@@ -39,6 +44,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
     put_data_file(&session, Path::new("test.txt"), &b"hey"[..]).await?;
 
     Ok(())
+}
+
+async fn wait_for_ssh_connectable(host: &str, port: u16) -> Result<(), Box<dyn Error>> {
+    
+    // lightweight ssh connection check than connect
+
+    let mut interval = interval(Duration::from_secs(10));
+
+    loop {
+        match timeout(Duration::from_secs(5), TcpStream::connect((host, port))).await {
+            Err(_) => {
+                eprintln!("waiting for ssh: timeout");
+                interval.tick().await;
+            }
+            Ok(Err(e)) => {
+                eprintln!("waiting for ssh: {}", e);
+                interval.tick().await;
+            }
+            Ok(Ok(_)) => {
+                return Ok(());
+            }
+        }
+    }
 }
 
 async fn command_list(session: &Session) -> Result<(), Box<dyn Error>> {
